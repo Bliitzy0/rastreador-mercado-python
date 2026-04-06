@@ -23,9 +23,6 @@ def obtener_catalogo():
 # ==========================================
 # PANEL LATERAL: OPERACIONES (Tabs)
 # ==========================================
-# ==========================================
-# PANEL LATERAL: OPERACIONES (Tabs)
-# ==========================================
 with st.sidebar:
     st.header("⚙️ Operaciones")
     
@@ -121,7 +118,7 @@ with st.sidebar:
             st.info("No hay productos para eliminar.")
 # ==========================================
 # ÁREA PRINCIPAL: EL REPORTE VISUAL
-# ==========================================
+
 st.title("📊 Panel de Control del Mercado")
 st.write("Monitorea y actualiza tu inventario en tiempo real.")
 st.divider()
@@ -129,7 +126,6 @@ st.divider()
 try:
     conexion = sqlite3.connect("mi_rastreador.db")
     
-    # Modificamos la consulta para que los precios más nuevos salgan hasta arriba (ORDER BY DESC)
     consulta_sql = """
         SELECT productos.nombre, productos.categoria, historial_precios.precio, historial_precios.fecha
         FROM productos
@@ -139,10 +135,35 @@ try:
     
     datos_visuales = pd.read_sql_query(consulta_sql, conexion)
     
-    st.subheader("📦 Inventario y Variaciones")
-    st.dataframe(datos_visuales, use_container_width=True, hide_index=True)
+    # Verificamos que la base de datos no esté vacía antes de intentar dibujar
+    if not datos_visuales.empty:
+        
+        # --- ZONA 1: LA GRÁFICA (El Científico de Datos) ---
+        st.subheader("📈 Tendencia del Mercado")
+        
+        # 1. Hacemos una copia para no alterar la tabla original
+        datos_grafica = datos_visuales.copy()
+        
+        # 2. Le decimos a Pandas que la columna de texto 'fecha' es una fecha real de calendario
+        datos_grafica['fecha'] = pd.to_datetime(datos_grafica['fecha'])
+        
+        # 3. ¡LA MAGIA! Creamos la Tabla Dinámica
+        tabla_pivot = datos_grafica.pivot_table(index='fecha', columns='nombre', values='precio')
+        
+        # 4. Streamlit dibuja la gráfica automáticamente basándose en la tabla dinámica
+        st.line_chart(tabla_pivot)
+        
+        st.divider()
+        
+        # --- ZONA 2: LA TABLA (El Historial Crudo) ---
+        st.subheader("📦 Registro Histórico Detallado")
+        st.dataframe(datos_visuales, use_container_width=True, hide_index=True)
+        
+    else:
+        st.info("📭 Tu bóveda está vacía. ¡Usa el panel lateral para registrar tu primer equipo!")
 
 except sqlite3.Error as error:
     st.error(f"Error al conectar con la bóveda: {error}")
+
 finally:
     if 'conexion' in locals(): conexion.close()
