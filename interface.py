@@ -23,11 +23,14 @@ def obtener_catalogo():
 # ==========================================
 # PANEL LATERAL: OPERACIONES (Tabs)
 # ==========================================
+# ==========================================
+# PANEL LATERAL: OPERACIONES (Tabs)
+# ==========================================
 with st.sidebar:
     st.header("⚙️ Operaciones")
     
-    # Creamos dos pestañas de navegación
-    tab_nuevo, tab_actualizar = st.tabs(["Nuevo Producto", "Actualizar Precio"])
+    # ¡Agregamos la tercera pestaña!
+    tab_nuevo, tab_actualizar, tab_eliminar = st.tabs(["Nuevo", "Actualizar", "Eliminar"])
     
     # --- PESTAÑA 1: NUEVO PRODUCTO ---
     with tab_nuevo:
@@ -45,11 +48,9 @@ with st.sidebar:
                         conexion = sqlite3.connect("mi_rastreador.db")
                         cursor = conexion.cursor()
                         fecha_hoy = date.today().isoformat()
-                        
                         cursor.execute("INSERT INTO productos (nombre, categoria) VALUES (?, ?)", (nuevo_nombre, nueva_categoria))
                         id_generado = cursor.lastrowid
-                        cursor.execute("INSERT INTO historial_precios (producto_id, precio, fecha) VALUES (?, ?, ?)", 
-                                       (id_generado, nuevo_precio, fecha_hoy))
+                        cursor.execute("INSERT INTO historial_precios (producto_id, precio, fecha) VALUES (?, ?, ?)", (id_generado, nuevo_precio, fecha_hoy))
                         conexion.commit()
                         st.success(f"✅ ¡'{nuevo_nombre}' guardado!")
                     except sqlite3.Error as error:
@@ -57,29 +58,22 @@ with st.sidebar:
                     finally:
                         if 'conexion' in locals(): conexion.close()
 
-    # --- PESTAÑA 2: ACTUALIZAR PRECIO (¡Lo nuevo!) ---
+    # --- PESTAÑA 2: ACTUALIZAR PRECIO ---
     with tab_actualizar:
         catalogo = obtener_catalogo()
-        
         if len(catalogo) > 0:
             with st.form("formulario_actualizar", clear_on_submit=True):
-                # 🥷 Tip Ninja: format_func le dice a Streamlit que aunque el valor interno
-                # sea la tupla completa (1, 'Corsair'), en pantalla solo muestre el texto (índice 1)
                 producto_elegido = st.selectbox("Selecciona el producto:", catalogo, format_func=lambda x: x[1])
-                
                 precio_nuevo = st.number_input("Nuevo precio detectado:", min_value=0.0, step=100.0)
                 btn_actualizar = st.form_submit_button("Registrar Variación")
                 
                 if btn_actualizar:
-                    id_del_producto = producto_elegido[0] # Sacamos el ID oculto (índice 0)
+                    id_del_producto = producto_elegido[0]
                     try:
                         conexion = sqlite3.connect("mi_rastreador.db")
                         cursor = conexion.cursor()
                         fecha_hoy = date.today().isoformat()
-                        
-                        # ¡Solo insertamos en el historial, el catálogo ya existe!
-                        cursor.execute("INSERT INTO historial_precios (producto_id, precio, fecha) VALUES (?, ?, ?)", 
-                                       (id_del_producto, precio_nuevo, fecha_hoy))
+                        cursor.execute("INSERT INTO historial_precios (producto_id, precio, fecha) VALUES (?, ?, ?)", (id_del_producto, precio_nuevo, fecha_hoy))
                         conexion.commit()
                         st.success("📈 ¡Historial actualizado!")
                     except sqlite3.Error as error:
@@ -89,6 +83,42 @@ with st.sidebar:
         else:
             st.info("Tu bóveda está vacía. Agrega productos primero.")
 
+    # --- PESTAÑA 3: ELIMINAR PRODUCTO (¡Lo nuevo!) ---
+    with tab_eliminar:
+        catalogo = obtener_catalogo() # Volvemos a pedir la lista de productos
+        
+        if len(catalogo) > 0:
+            with st.form("formulario_eliminar", clear_on_submit=True):
+                st.warning("⚠️ Cuidado: Esta acción no se puede deshacer.")
+                producto_a_borrar = st.selectbox("Producto a eliminar:", catalogo, format_func=lambda x: x[1])
+                
+                # Un botón rojo para que se vea peligroso
+                btn_eliminar = st.form_submit_button("🚨 Eliminar Definitivamente", type="primary")
+                
+                if btn_eliminar:
+                    id_borrar = producto_a_borrar[0]
+                    nombre_borrar = producto_a_borrar[1]
+                    
+                    try:
+                        conexion = sqlite3.connect("mi_rastreador.db")
+                        cursor = conexion.cursor()
+                        
+                        # PASO 1: Borrar el historial (Los Hijos)
+                        cursor.execute("DELETE FROM historial_precios WHERE producto_id = ?", (id_borrar,))
+                        
+                        # PASO 2: Borrar el producto del catálogo (El Padre)
+                        cursor.execute("DELETE FROM productos WHERE id = ?", (id_borrar,))
+                        
+                        conexion.commit()
+                        st.success(f"🗑️ '{nombre_borrar}' ha sido eliminado del sistema.")
+                        
+                    except sqlite3.Error as error:
+                        conexion.rollback() # Si algo falla, cancelamos la eliminación
+                        st.error(f"❌ Error al eliminar: {error}")
+                    finally:
+                        if 'conexion' in locals(): conexion.close()
+        else:
+            st.info("No hay productos para eliminar.")
 # ==========================================
 # ÁREA PRINCIPAL: EL REPORTE VISUAL
 # ==========================================
